@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Producto",
+  "type": "object",
+  "required": [
+    "nombre",
+    "precio",
+    "categoria"
+  ],
+  "properties": {
+    "nombre": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "precio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "electronica",
+        "oficina",
+        "hogar"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

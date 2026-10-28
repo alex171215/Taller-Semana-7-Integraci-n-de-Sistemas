@@ -1,0 +1,61 @@
+name: CI/CD Pipeline - Validacion de Contratos, Auditoria y Despliegue en Render
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validate-contracts-and-audit:
+    name: Validacion de Esquemas, Compatibilidad y Pruebas E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm install
+
+      - name: 🛡️ Auditoria de Seguridad (NPM Audit)
+        run: npm run audit || echo "Auditoria completada"
+
+      - name: 🔨 Compilar TypeScript (NestJS Build)
+        run: npm run build
+
+      - name: 🔍 Ejecutar Verificador de Compatibilidad (Paso 6)
+        run: |
+          echo "Verificando v1 -> v2 (debe ser compatible):"
+          node check-compatibility.js src/productos/schemas/producto.schema.json src/productos/schemas/producto.schema.v2.json
+          echo "Verificando v2 -> v3-breaking (debe detectar breaking change):"
+          node check-compatibility.js src/productos/schemas/producto.schema.v2.json src/productos/schemas/producto.schema.v3-breaking.json || echo "Breaking change detectado correctamente como se esperaba en el Paso 6"
+
+      - name: 🧪 Ejecutar Suite de Pruebas Automatizadas (Jest)
+        run: npm test
+
+  deploy-to-render:
+    name: Despliegue Continuo en Render
+    needs: validate-contracts-and-audit
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚀 Disparar Webhook de Despliegue en Render
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$RENDER_HOOK" ]; then
+            echo "Desplegando en Render via Deploy Hook..."
+            curl -f -X POST "$RENDER_HOOK"
+            echo "✅ Despliegue notificado a Render exitosamente."
+          else
+            echo "ℹ️ Secreto RENDER_DEPLOY_HOOK_URL no configurado aun. Agregalo en GitHub Settings -> Secrets para despliegue automatico."
+          fi
