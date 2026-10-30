@@ -1,562 +1,219 @@
 # INFORME EJECUTIVO DE AUDITORÍA TÉCNICA Y ARQUITECTÓNICA
-## Evaluación Integral de Calidad, Seguridad y Gobernanza de Contratos API
-**Proyecto:** Plataforma de Gestión de Productos orientada a Contratos (Schema-First API)  
-**Semana Evaluada:** Semana 7 - Contratos y Validación con JSON Schema y NestJS  
-**Autor:** Auditoría de Arquitectura de Software e Integración de Sistemas  
-**Fecha:** Octubre 2026  
-**Clasificación:** Confidencial / Informe Ejecutivo para Dirección de Tecnología (CTO / Lead Architect)  
+## Evaluación Integral de Calidad, Resiliencia, Seguridad y Gobernanza de Contratos API
+**Proyecto:** Plataforma de Gestión de Productos orientada a Contratos (*Schema-First API*)  
+**Módulo Evaluado:** Taller Semana 7 — Integración de Sistemas con NestJS y JSON Schema (Draft 2020-12)  
+**Repositorio Oficial:** [alex171215/Taller-Semana-7-Integración-de-Sistemas](https://github.com/alex171215/Taller-Semana-7-Integraci-n-de-Sistemas.git)  
+**Fecha de Evaluación:** Octubre 2026  
+**Audiencia Objetivo:** Dirección de Tecnología (CTO), Arquitectos de Software, Líderes Técnicos y DevSecOps  
 
 ---
 
 ## 1. RESUMEN EJECUTIVO
 
-### 1.1. Contexto de la Evaluación
-Se ha ejecutado una auditoría exhaustiva de código, arquitectura, seguridad y ciclo de vida de contratos sobre el servicio de backend implementado en **NestJS 10**, diseñado bajo el paradigma **Schema-First** utilizando el motor de validación **Ajv (Draft 2020-12)** y desplegado mediante contenedores Docker en **Render** con integración continua en **GitHub Actions**.
+### 1.1. Propósito y Alcance del Análisis
+El presente informe constituye una auditoría técnica profunda sobre el diseño, arquitectura, seguridad, mecanismos de validación y ciclo de vida de contratos del microservicio desarrollado en **NestJS 10**. El sistema fue concebido bajo el paradigma **Schema-First**, donde los contratos de datos se definen formalmente en especificaciones **JSON Schema (Draft 2020-12)** y son compilados en tiempo de ejecución por el motor **Ajv 2020**, respaldado por un pipeline de integración y despliegue continuo en **GitHub Actions** hacia la plataforma Cloud **Render**.
 
-El objetivo de la auditoría es contrastar el estado actual del repositorio frente a los estándares de la industria para microservicios de misión crítica, identificando no solo vulnerabilidades de seguridad y limitaciones operativas, sino también inconsistencias en la gobernanza de contratos, detección de incompatibilidades semánticas (*breaking changes*) y resiliencia de datos.
+El propósito fundamental de esta auditoría es diagnosticar la brecha técnica existente entre la implementación actual (desarrollada conforme a los lineamientos del taller académico) y los estándares de ingeniería exigidos en entornos corporativos de alta demanda, transaccionalidad crítica e integración de sistemas heterogéneos.
 
-### 1.2. Veredicto Global
-* **Cumplimiento de Especificación Funcional Académica:** **100% SATISFACTORIO**. El proyecto satisface todos los requerimientos de la guía de laboratorio (Paso 1 al 7), incluyendo validación estricta con `additionalProperties: false`, versionamiento de esquemas v1/v2/v3-breaking, algoritmos de detección de ruptura de contratos y despliegue automatizado.
-* **Preparación para Producción Empresarial (Enterprise Readiness):** **NIVEL MEDIO-BAJO (Requiere Remediación Inmediata)**. Se han detectado **7 hallazgos técnicos** de severidad Crítica, Alta y Media que, de desplegarse en un entorno bancario, de comercio electrónico de alto tráfico o de integración B2B, generarían caídas de servicio, pérdida irreversible de datos, potenciales vectores de Prototype Pollution y falsos negativos en la prevención de rotura de clientes en producción.
+### 1.2. Dictamen General de la Auditoría
+* **Cumplimiento Funcional del Taller Académico:** **100% SATISFACTORIO**. El código satisface la totalidad de los requisitos pedagógicos: esquemas versionados v1, v2 y v3-breaking, validación estricta con bloqueo de propiedades no declaradas (`additionalProperties: false`), verificación automatizada de compatibilidad backward y despliegue continuo con 15 pruebas unitarias exitosas.
+* **Madurez y Preparación para Producción Empresarial (*Enterprise Readiness*):** **NIVEL MEDIO-BAJO (Requiere Plan de Remediación Obligatorio)**. A pesar de su correcta lógica funcional, la aplicación presenta vulnerabilidades de arquitectura y seguridad sustanciales: el estado reside exclusivamente en memoria volátil, la validación expone vectores de ataque por contaminación de prototipos, el algoritmo de compatibilidad de esquemas genera falsos negativos críticos, y las respuestas de error exponen metadatos internos del sistema.
 
-### 1.3. Matriz Resumen de Hallazgos
+### 1.3. Matriz Ejecutiva de Hallazgos y Severidad
 
-| ID | Hallazgo / Deficiencia Técnica | Categoría | Severidad | Impacto en la Aplicación |
+| Identificador | Hallazgo / Deficiencia Detectada | Dominio de Ingeniería | Nivel de Severidad | Impacto Operativo y de Negocio |
 |---|---|---|---|---|
-| **AUD-01** | Persistencia volátil en memoria (`Map<string, Producto>`) | Arquitectura / Resiliencia | **CRÍTICA** | Pérdida de datos en reinicios; imposibilidad de escalado horizontal multi-instancia. |
-| **AUD-02** | Vulnerabilidad de envenenamiento de prototipo (*Prototype Pollution*) y falta de *Strict Mode* en Ajv | Seguridad de Aplicación | **ALTA** | Modificación maliciosa del `Object.prototype`, bypass de validaciones o DoS. |
-| **AUD-03** | Falsos negativos y cobertura superficial en algoritmo de compatibilidad (`check-compatibility.js`) | Integración / Contratos | **ALTA** | Despliegue inadvertido de breaking changes (enums reducidos, rangos numéricos acotados, objetos anidados). |
-| **AUD-04** | Fuga de información técnica interna en respuestas HTTP 400 (`validateFn.errors`) | Seguridad / API Design | **MEDIA** | Reconocimiento de topología interna del schema por atacantes; no adherencia a RFC 7807. |
-| **AUD-05** | Acoplamiento estático de esquemas y ausencia de Centralized Schema Registry | Gobernanza de Datos | **MEDIA** | Drift entre microservicios; consumidores sin acceso a fuente única de verdad en tiempo de ejecución. |
-| **AUD-06** | Contenedor Docker ejecutado con privilegios de superusuario (`root`) | Infraestructura / Docker | **MEDIA** | Riesgo de escape de contenedor y ejecución de comandos con privilegios elevados en el host. |
-| **AUD-07** | Ceguera operacional por ausencia de Logger estructurado y telemetría de fallos de contrato | Observabilidad | **BAJA-MEDIA** | Imposibilidad de auditar patrones de ataque o degradación de clientes en tiempo real. |
+| **AUD-01** | Persistencia volátil en memoria y ruptura de consistencia horizontal | Arquitectura de Datos | **CRÍTICA** | Pérdida total de datos en reinicios del servidor e inconsistencias (errores 404) al escalar a múltiples instancias. |
+| **AUD-02** | Riesgo de Prototype Pollution y carencia de modo estricto en Ajv | Seguridad de Aplicación | **ALTA** | Exposición a manipulación indebida del prototipo base de JavaScript y vulnerabilidad a denegación de servicio (ReDoS). |
+| **AUD-03** | Falsos negativos y análisis superficial en el verificador de compatibilidad | Gobernanza de Contratos | **ALTA** | Paso inadvertido a producción de breaking changes que rompen clientes existentes (reducción de enums, rangos y objetos anidados). |
+| **AUD-04** | Fuga de metadatos internos en respuestas HTTP 400 (Violación RFC 7807) | Seguridad / API Design | **MEDIA** | Exposición de la topología interna del schema a atacantes; desalineación con el estándar corporativo de reporte de errores. |
+| **AUD-05** | Acoplamiento estático de esquemas y ausencia de Schema Registry | Arquitectura Distribuida | **MEDIA** | Desincronización (*contract drift*) entre microservicios consumidores; necesidad de redespliegue ante cambios menores. |
+| **AUD-06** | Ejecución del contenedor Docker bajo usuario con privilegios de superusuario (`root`) | Seguridad en Infraestructura | **MEDIA** | Riesgo de escalamiento de privilegios y escape de contenedor hacia el host ante vulnerabilidades en el runtime. |
+| **AUD-07** | Ausencia de telemetría, métricas de contratos y logging no estructurado | Observabilidad y SRE | **BAJA-MEDIA** | Incapacidad de auditar clientes desactualizados, monitorear tasas de rechazo de esquemas o correlacionar incidentes. |
 
 ---
 
-## 2. DETALLE DE HALLAZGOS TÉCNICOS, IMPACTO Y SOLUCIONES DE INGENIERÍA
-
-```
-  +-----------------------------------------------------------------------------------+
-  |                                AUDITORÍA TÉCNICA                                  |
-  +-----------------------------------------------------------------------------------+
-  | AUD-01: Persistencia Volátil en Memoria     -> Severidad: CRÍTICA                 |
-  | AUD-02: Prototype Pollution en Ajv          -> Severidad: ALTA                    |
-  | AUD-03: Limitaciones en check-compatibility -> Severidad: ALTA                    |
-  | AUD-04: Fuga de Metadatos en HTTP 400       -> Severidad: MEDIA                   |
-  | AUD-05: Acoplamiento Estático de Esquemas   -> Severidad: MEDIA                   |
-  | AUD-06: Ejecución Docker como Root          -> Severidad: MEDIA                   |
-  | AUD-07: Carencia de Logging Estructurado    -> Severidad: BAJA-MEDIA              |
-  +-----------------------------------------------------------------------------------+
-```
+## 2. AUDITORÍA TÉCNICA DETALLADA: PROBLEMAS, IMPACTOS Y SOLUCIONES
 
 ---
 
 ### HALLAZGO AUD-01: Persistencia Volátil en Memoria (`Map<string, Producto>`) y Ruptura de Consistencia Horizontal
+* **Severidad:** **CRÍTICA**  
+* **Componente Afectado:** `src/productos/productos.service.ts`
 
-#### Enunciado Técnico del Problema
-En el archivo `src/productos/productos.service.ts`, el almacenamiento de los registros de productos se encuentra delegado a una estructura en memoria dentro del ciclo de vida del singleton de NestJS:
-
-```typescript
-@Injectable()
-export class ProductosService {
-  private productos: Map<string, Producto> = new Map();
-  // ...
-}
-```
+#### Enunciado y Detalle Técnico del Error
+El servicio `ProductosService` almacena los datos de los productos mediante una colección privada en memoria basada en la estructura nativa `Map<string, Producto>`. Esta colección reside únicamente en el espacio de memoria RAM del proceso de Node.js que ejecuta la aplicación. Cada operación de creación, consulta y eliminación interactúa exclusivamente con este mapa volátil, dependiendo de la vida útil del proceso del sistema operativo.
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Volatilidad Extrema:** En plataformas Cloud como Render, Heroku o Kubernetes, las instancias se reinician automáticamente ante despliegues de CI/CD, mantenimiento del proveedor o reinicios por inactividad (*idle scale down* en tiers gratuitos). Cada reinicio borra el 100% de los productos creados por los usuarios, restaurando únicamente los 3 productos semilla iniciales.
-2. **Incompatibilidad con Escalabilidad Horizontal:** Si la aplicación se escala a 2 o más réplicas (detrás de un Load Balancer), la petición `POST /productos` en la instancia A registrará el producto en su memoria local. Cuando el cliente realice `GET /productos/:id` y el balanceador enrute a la instancia B, la API responderá con `404 Not Found`, generando inconsistencia de estado inaceptable para un entorno transaccional.
+1. **Pérdida Irreversible de Información:** En infraestructuras modernas en la nube como Render, AWS Elastic Beanstalk o clústeres de Kubernetes, las instancias de los contenedores son efímeras. Cuando se realiza un nuevo despliegue a través del pipeline de CI/CD, o cuando el proveedor recicla contenedores por balanceo de recursos o inactividad, el proceso Node.js se destruye. En ese instante, todos los productos creados por los usuarios desaparecen definitivamente, restableciéndose únicamente los 3 productos configurados como semilla inicial.
+2. **Incompatibilidad Absoluta con el Escalado Horizontal:** Si la aplicación experimenta un incremento de tráfico y se escala a dos o más réplicas detrás de un balanceador de carga, cada réplica mantendrá su propia instancia aislada del mapa en memoria. Si un cliente emite una petición de creación que es recibida por la Réplica A, y su siguiente petición de consulta es derivada por el balanceador hacia la Réplica B, el sistema responderá con un error `404 Not Found`. Esto provoca un comportamiento errático e inconsistente que destruye la confiabilidad del servicio ante clientes externos.
+3. **Inexistencia de Garantías Transaccionales:** No existen mecanismos de atomicidad, consistencia, aislamiento ni durabilidad (propiedades ACID), lo que genera riesgo de condiciones de carrera en operaciones concurrentes de escritura y borrado.
 
-#### Solución Técnica Detallada
-Reemplazar el almacenamiento en memoria por una capa de abstracción con el **Repository Pattern**, respaldada por una base de datos relacional persistente (PostgreSQL) o NoSQL gestionada, administrada mediante un ORM tipado como **Prisma** o **TypeORM**.
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+La solución requiere desacoplar por completo el almacenamiento de datos del ciclo de vida del proceso de la aplicación, implementando una arquitectura de persistencia empresarial basada en el patrón de diseño **Repository**.
 
-##### Implementación Recomendada (Prisma + PostgreSQL):
+Se debe incorporar una base de datos relacional externa de alta disponibilidad, como **PostgreSQL**, gestionada a través de un ORM moderno y tipado como **Prisma** o **TypeORM**. La capa de servicio en NestJS debe inyectar el cliente de base de datos y transformar cada método (`crear`, `obtenerTodos`, `obtenerPorId`, `eliminar`) en operaciones asíncronas delegadas al motor relacional mediante transacciones seguras. Asimismo, se debe configurar una capa de conexión compartida (*connection pooling* con PgBouncer) para administrar eficientemente las conexiones en picos de alta concurrencia. De esta forma, cualquier número de réplicas del microservicio compartirá la misma fuente de verdad persistente, garantizando consistencia inmediata y tolerancia a fallos.
 
-1. **Definición del Modelo de Datos (`prisma/schema.prisma`):**
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-model Producto {
-  id             String   @id @default(uuid())
-  nombre         String   @db.VarChar(120)
-  precio         Decimal  @db.Decimal(12, 2)
-  categoria      String?  @db.VarChar(50)
-  versionEsquema String   @default("v1") @db.VarChar(20)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([categoria])
-}
-```
-
-2. **Refactorización del Servicio (`src/productos/productos.service.ts`):**
-```typescript
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { Producto } from '@prisma/client';
-
-@Injectable()
-export class ProductosService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async crear(datos: any, version: string = 'v1'): Promise<Producto> {
-    return this.prisma.producto.create({
-      data: {
-        nombre: datos.nombre,
-        precio: datos.precio,
-        categoria: datos.categoria ?? null,
-        versionEsquema: version,
-      },
-    });
-  }
-
-  async obtenerTodos(): Promise<Producto[]> {
-    return this.prisma.producto.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async obtenerPorId(id: string): Promise<Producto> {
-    const prod = await this.prisma.producto.findUnique({ where: { id } });
-    if (!prod) {
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
-    }
-    return prod;
-  }
-
-  async eliminar(id: string): Promise<boolean> {
-    await this.obtenerPorId(id);
-    await this.prisma.producto.delete({ where: { id } });
-    return true;
-  }
-}
-```
+*Línea ilustrativa:*  
+`await this.prisma.producto.create({ data: { nombre, precio, categoria, versionEsquema } });`
 
 ---
 
-### HALLAZGO AUD-02: Vulnerabilidad de Prototype Pollution y Falta de Strict Mode en Instancia de Ajv
+### HALLAZGO AUD-02: Exposición a Vulnerabilidad de Prototype Pollution y Ausencia de Modo Estricto en Ajv
+* **Severidad:** **ALTA**  
+* **Componente Afectado:** `src/common/json-schema-validation.pipe.ts`
 
-#### Enunciado Técnico del Problema
-En `src/common/json-schema-validation.pipe.ts`, la instancia del compilador Ajv se inicializa con la configuración básica:
-
-```typescript
-const ajv = new Ajv2020({ allErrors: true });
-addFormats(ajv);
-```
-
-Esta configuración carece de directivas de endurecimiento (*hardening*) de seguridad contra la inyección de propiedades especiales de JavaScript (`__proto__`, `constructor`, `prototype`).
+#### Enunciado y Detalle Técnico del Error
+En el pipe de validación personalizado `JsonSchemaValidationPipe`, la instancia del validador Ajv se construye mediante `new Ajv2020({ allErrors: true })`. Esta inicialización carece de banderas de seguridad indispensables. No se activa el modo de verificación rigurosa de especificaciones (`strict: true`), se mantiene habilitada la heurística por defecto que permite la entrada de propiedades especiales de objetos, y no se desactiva explícitamente la coerción de tipos de datos (`coerceTypes: false`).
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Riesgo de Prototype Pollution (CWE-1321):** Aunque `additionalProperties: false` está activo en el schema raíz, si en futuras iteraciones se aceptan campos de tipo objeto libre o si se utiliza `coerceTypes: true`, un atacante puede enviar un payload malicioso conteniendo `{"__proto__": {"isAdmin": true}}`. En motores V8 desprotegidos, esto altera el prototipo base de `Object`, afectando la lógica de autorización en todos los demás módulos del servidor.
-2. **Degradación por ReDoS o Schemas Mal Formados:** Sin el modo estricto (`strict: true`), Ajv ignora advertencias críticas de diseño de esquemas, como expresiones regulares potencialmente vulnerables a *Catastrophic Backtracking* (ReDoS).
+1. **Riesgo de Contaminación de Prototipos (*Prototype Pollution* - CWE-1321):** Aunque el esquema actual utiliza la directiva `additionalProperties: false`, la instancia de Ajv no cuenta con filtros defensivos a nivel de parser. Si un atacante envía un cuerpo JSON especialmente manipulado que contenga propiedades reservadas de la cadena de prototipos de JavaScript (tales como `__proto__`, `constructor` o `prototype`), y estas propiedades interactúan con funciones auxiliares de clonado o fusión de objetos (*deep merge*), el atacante puede inyectar propiedades en el prototipo base `Object.prototype`. Esto permite alterar el comportamiento global de la aplicación, eludir verificaciones de seguridad en otros módulos o forzar excepciones no controladas.
+2. **Vulnerabilidad a Denegación de Servicio por Expresiones Regulares (*ReDoS*):** Sin la directiva `strict: true`, el compilador de Ajv ignora advertencias severas sobre expresiones regulares ambiguas dentro de los esquemas. Si en futuras iteraciones se añade una validación de formato mediante expresiones regulares con retroceso catastrófico (*Catastrophic Backtracking*), una carga útil maliciosa puede bloquear el *Event Loop* de Node.js al 100% de uso de CPU, provocando una caída completa del servicio para todos los usuarios.
 
-#### Solución Técnica Detallada
-Configurar la instancia global de Ajv en modo corporativo estricto con protección activa contra contaminación de prototipo y denegación de tipos no explícitos.
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+La remediación consiste en aplicar una estrategia de defensa en profundidad en dos capas: configuración estricta del compilador y sanitización defensiva en el pipeline de entrada.
 
-##### Implementación del Pipe Endurecido (`src/common/json-schema-validation.pipe.ts`):
-```typescript
-import { PipeTransform, Injectable, BadRequestException, ArgumentMetadata } from '@nestjs/common';
-import Ajv2020 from 'ajv/dist/2020';
-import addFormats from 'ajv-formats';
+En primer lugar, se debe configurar la instancia global de Ajv activando el modo estricto corporativo (`strict: true`), exigiendo que todos los formatos sean validados explícitamente (`validateFormats: true`) y desactivando la coerción automática de tipos (`coerceTypes: false`), obligando a que un número sea enviado como tipo numérico estricto y no como cadena convertible. En segundo lugar, dentro del método `transform` del pipe de NestJS, se debe implementar una verificación previa que inspeccione las claves del objeto entrante; si se detecta cualquier intento de enviar propiedades reservadas de prototipo, la petición se aborta de inmediato con una excepción HTTP 400 antes de que el objeto sea procesado o compilado en memoria.
 
-// Configuracion de maxima seguridad para entornos empresariales
-const ajv = new Ajv2020({
-  allErrors: true,
-  strict: true,             // Fuerza el cumplimiento estricto de la especificacion JSON Schema
-  validateFormats: true,
-  coerceTypes: false,       // Impide coercion silenciosa de tipos (ej: string "123" a number 123)
-  allowUnionTypes: true,
-  keywords: [],
-});
-
-// Registrar formatos estandar (email, uri, date-time, etc.)
-addFormats(ajv);
-
-@Injectable()
-export class JsonSchemaValidationPipe implements PipeTransform {
-  private validateFn: any;
-
-  constructor(private schema: object) {
-    this.validateFn = ajv.compile(this.schema);
-  }
-
-  transform(value: any, metadata?: ArgumentMetadata) {
-    // 1. Guard contra valores no-objeto, arrays o nulos
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new BadRequestException({
-        statusCode: 400,
-        error: 'Bad Request',
-        message: 'El payload de la peticion debe ser un objeto JSON valido',
-      });
-    }
-
-    // 2. Proteccion activa contra Prototype Pollution
-    if (
-      Object.prototype.hasOwnProperty.call(value, '__proto__') ||
-      Object.prototype.hasOwnProperty.call(value, 'constructor') ||
-      Object.prototype.hasOwnProperty.call(value, 'prototype')
-    ) {
-      throw new BadRequestException({
-        statusCode: 400,
-        error: 'Security Violation',
-        message: 'Payload contiene claves prohibidas reservadas del sistema',
-      });
-    }
-
-    // 3. Ejecucion de la validacion del contrato
-    const valido = this.validateFn(value);
-    if (!valido) {
-      throw new BadRequestException({
-        statusCode: 400,
-        error: 'Contract Validation Error',
-        message: 'El cuerpo de la peticion no cumple el contrato JSON Schema',
-        detalles: this.sanitizarErrores(this.validateFn.errors),
-      });
-    }
-
-    return value;
-  }
-
-  private sanitizarErrores(errors: any[]) {
-    // Evita fuga de rutas internas del sistema o schema internals
-    return (errors || []).map(err => ({
-      campo: err.instancePath.replace(/^\//, '') || err.params?.missingProperty || 'raiz',
-      regla: err.keyword,
-      mensaje: err.message,
-    }));
-  }
-}
-```
+*Configuración mínima recomendada:*  
+`const ajv = new Ajv2020({ allErrors: true, strict: true, coerceTypes: false, validateFormats: true });`
 
 ---
 
-### HALLAZGO AUD-03: Falsos Negativos y Cobertura Superficial en el Algoritmo de Compatibilidad Backward (`check-compatibility.js`)
+### HALLAZGO AUD-03: Falsos Negativos y Cobertura Superficial en el Verificador de Compatibilidad (`check-compatibility.js`)
+* **Severidad:** **ALTA**  
+* **Componente Afectado:** `check-compatibility.js` y el paso correspondiente en el pipeline `.github/workflows/ci-cd.yml`
 
-#### Enunciado Técnico del Problema
-En `check-compatibility.js`, la función `esCompatibleBackward` únicamente verifica 3 reglas heurísticas de primer nivel:
-1. Si se agregan campos requeridos.
-2. Si se eliminan propiedades de primer nivel.
-3. Si cambia el atributo `type` de primer nivel.
+#### Enunciado y Detalle Técnico del Error
+La función `esCompatibleBackward` implementada en `check-compatibility.js` evalúa únicamente tres condiciones superficiales de primer nivel: si se agregaron nuevos campos a la lista de requeridos, si se eliminaron propiedades directas del objeto, o si cambió el tipo primitivo de datos. El algoritmo carece de análisis semántico sobre restricciones cuantitativas, conjuntos cerrados de valores y jerarquías anidadas.
 
 #### Cómo Afecta a la Aplicación y al Negocio
-El algoritmo **falla silenciosamente** (reporta `{ compatible: true }`) ante múltiples cambios disruptivos reconocidos por la especificación de JSON Schema. Si el pipeline CI/CD confía ciegamente en este script:
-1. **Reducción de Valores Permitidos en `enum`:** Si la versión 2 acepta `["electronica", "oficina", "hogar"]` y en la versión 3 un desarrollador elimina `"oficina"`, los clientes existentes que siguen enviando `"oficina"` recibirán errores 400 en producción. El script actual no detecta este breaking change.
-2. **Ajuste de Restricciones Numéricas y de Longitud:** Si `precio` tenía `minimum: 0` y la nueva versión sube a `minimum: 100`, las compras de $50 que antes eran válidas ahora fallarán. El script actual no analiza `minimum`, `maximum`, `minLength`, `maxLength` ni `pattern`.
-3. **Estructuras Anidadas:** Si el schema introduce objetos anidados (por ejemplo, `dimensiones.alto`), el script no realiza análisis recursivo.
-4. **Relajación/Ajuste de `additionalProperties`:** Cambiar `additionalProperties: true` a `false` rompe clientes que enviaban campos extra inocuos.
+El verificador genera **falsos negativos críticos**, lo que significa que aprueba esquemas que en realidad rompen la compatibilidad con clientes existentes. Si un cambio en los contratos pasa esta validación, el pipeline de CI/CD autoriza el despliegue automático a producción, provocando incidentes graves:
+1. **Reducción Inadvertida de Enumeraciones (`enum`):** Si la versión 2 acepta las categorías `["electronica", "oficina", "hogar"]` y en la versión 3 un desarrollador elimina la categoría `"oficina"`, el script actual dictamina que el cambio es 100% compatible. Al llegar a producción, todos los sistemas satélites que envíen productos de oficina comenzarán a ser rechazados con errores 400.
+2. **Endurecimiento de Restricciones Numéricas y de Longitud:** Si el campo `precio` tenía una restricción `minimum: 0` y en la siguiente versión se modifica a `minimum: 50`, cualquier cliente que cree productos con precios menores fallará. El script actual no inspecciona palabras clave como `minimum`, `maximum`, `minLength`, `maxLength` ni `pattern`.
+3. **Ceguera ante Objetos Anidados y Colecciones:** El script solo lee el primer nivel del JSON. Si el contrato añade objetos secundarios o listas (`items`), las alteraciones incompatibles en esos niveles pasan totalmente desapercibidas.
+4. **Restricción de Propiedades Adicionales:** Si un esquema previo permitía propiedades adicionales y el nuevo las bloquea (`additionalProperties: false`), los clientes que enviaban campos complementarios serán rechazados.
 
-#### Solución Técnica Detallada
-Refactorizar el verificador de compatibilidad para incluir un análisis semántico exhaustivo de sub-esquemas, restricciones numéricas, reducción de conjuntos `enum` y validación recursiva.
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+Es indispensable refactorizar el verificador para convertirlo en un evaluador semántico recursivo basado en la teoría de subconjuntos de JSON Schema.
 
-##### Algoritmo de Compatibilidad Refactorizado de Nivel Empresarial:
-```javascript
-/**
- * Verificador Empresarial de Compatibilidad Backward para JSON Schema (Draft 2020-12)
- */
-function esCompatibleBackwardAvanzado(schemaViejo, schemaNuevo, ruta = '') {
-  const problemas = [];
-
-  const reqViejo = new Set(schemaViejo.required || []);
-  const reqNuevo = new Set(schemaNuevo.required || []);
-
-  // 1. Nuevos campos requeridos que no existian o que eran opcionales
-  for (const campo of reqNuevo) {
-    const prefijo = ruta ? `${ruta}.${campo}` : campo;
-    if (!reqViejo.has(campo)) {
-      problemas.push(`[BREAKING] El campo '${prefijo}' ahora es requerido (rompe clientes existentes)`);
-    }
-  }
-
-  // 2. Eliminacion de campos existentes
-  const propsViejas = schemaViejo.properties || {};
-  const propsNuevas = schemaNuevo.properties || {};
-
-  for (const campo of Object.keys(propsViejas)) {
-    const prefijo = ruta ? `${ruta}.${campo}` : campo;
-    if (!(campo in propsNuevas)) {
-      problemas.push(`[BREAKING] El campo '${prefijo}' fue eliminado del contrato nuevo`);
-      continue;
-    }
-
-    const subViejo = propsViejas[campo];
-    const subNuevo = propsNuevas[campo];
-
-    // 3. Modificacion de tipo primitivo
-    if (subViejo.type && subNuevo.type && subViejo.type !== subNuevo.type) {
-      problemas.push(`[BREAKING] Tipo alterado en '${prefijo}': ${subViejo.type} -> ${subNuevo.type}`);
-    }
-
-    // 4. Reduccion de dominio en Enums (Breaking)
-    if (Array.isArray(subViejo.enum) && Array.isArray(subNuevo.enum)) {
-      const nuevoEnumSet = new Set(subNuevo.enum);
-      for (const val of subViejo.enum) {
-        if (!nuevoEnumSet.has(val)) {
-          problemas.push(`[BREAKING] Se elimino el valor permitido '${val}' del enum en '${prefijo}'`);
-        }
-      }
-    }
-
-    // 5. Endurecimiento de restricciones numericas
-    if (subNuevo.minimum !== undefined && subViejo.minimum !== undefined) {
-      if (subNuevo.minimum > subViejo.minimum) {
-        problemas.push(`[BREAKING] Restriccion 'minimum' endurecida en '${prefijo}': ${subViejo.minimum} -> ${subNuevo.minimum}`);
-      }
-    }
-    if (subNuevo.maximum !== undefined && subViejo.maximum !== undefined) {
-      if (subNuevo.maximum < subViejo.maximum) {
-        problemas.push(`[BREAKING] Restriccion 'maximum' endurecida en '${prefijo}': ${subViejo.maximum} -> ${subNuevo.maximum}`);
-      }
-    }
-
-    // 6. Endurecimiento de restricciones de texto
-    if (subNuevo.maxLength !== undefined && subViejo.maxLength !== undefined) {
-      if (subNuevo.maxLength < subViejo.maxLength) {
-        problemas.push(`[BREAKING] 'maxLength' reducido en '${prefijo}': ${subViejo.maxLength} -> ${subNuevo.maxLength}`);
-      }
-    }
-
-    // 7. Recursion en objetos anidados
-    if (subViejo.type === 'object' && subNuevo.type === 'object') {
-      const subProblemas = esCompatibleBackwardAvanzado(subViejo, subNuevo, prefijo);
-      problemas.push(...subProblemas.problemas);
-    }
-  }
-
-  // 8. additionalProperties restringido
-  if (schemaViejo.additionalProperties !== false && schemaNuevo.additionalProperties === false) {
-    problemas.push(`[BREAKING] 'additionalProperties' cambio de permisivo a estricto (false)`);
-  }
-
-  return {
-    compatible: problemas.length === 0,
-    problemas,
-  };
-}
-
-module.exports = { esCompatibleBackward: esCompatibleBackwardAvanzado };
-```
+El algoritmo debe recorrer recursivamente la estructura del contrato. Para cada propiedad coincidente entre ambas versiones, debe verificar que el dominio permitido en el nuevo esquema contenga íntegramente al dominio del esquema anterior. Específicamente, en campos de tipo `enum`, debe validar matemáticamente que el nuevo conjunto sea un superconjunto del anterior (no se permite eliminar elementos). En restricciones numéricas, debe comprobar que el nuevo valor de `minimum` sea menor o igual al original, y que el nuevo `maximum` sea mayor o igual. En restricciones de longitud de cadena, el nuevo `maxLength` no puede ser inferior al anterior. Si una propiedad es de tipo objeto, la función debe autoinvocarse recursivamente agregando la ruta del campo al contexto de auditoría. Si cualquiera de estas reglas se infringe, el proceso debe finalizar con un código de salida distinto de cero para detener de forma contundente el pipeline de despliegue.
 
 ---
 
 ### HALLAZGO AUD-04: Fuga de Metadatos y Estructuras Internas en Respuestas HTTP 400
+* **Severidad:** **MEDIA**  
+* **Componente Afectado:** `src/common/json-schema-validation.pipe.ts`
 
-#### Enunciado Técnico del Problema
-En `JsonSchemaValidationPipe`, al detectar una falla, se retorna el objeto crudo `this.validateFn.errors`:
-
-```typescript
-if (!valido) {
-  throw new BadRequestException({
-    mensaje: 'El cuerpo de la peticion no cumple el contrato JSON Schema',
-    errores: this.validateFn.errors,
-  });
-}
-```
+#### Enunciado y Detalle Técnico del Error
+Cuando una petición no supera la validación del contrato, el pipe lanza una excepción `BadRequestException` pasando directamente la colección cruda `this.validateFn.errors` generada por el compilador de Ajv.
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Fuga de Información (Information Disclosure - CWE-200):** El objeto crudo de Ajv contiene propiedades como `schemaPath`, `dataVar`, `parentSchema` y punteros de serialización interna. Esto expone ante terceros la estructura completa de validación interna del backend, simplificando la ingeniería inversa de los sistemas para potenciales atacantes.
-2. **Falta de Adherencia a Estándares de la Industria:** Las APIs REST corporativas modernas deben retornar respuestas estandarizadas bajo **RFC 7807 (Problem Details for HTTP APIs)** o **RFC 9457**, permitiendo a clientes móviles y frontends web parsear errores de forma predecible sin depender de estructuras ad-hoc.
+1. **Fuga de Información Confidencial de Arquitectura (*Information Disclosure* - CWE-200):** La salida nativa de Ajv incluye metadatos como `schemaPath`, punteros de compilación interna (`#/properties/precio/minimum`), variables del motor de validación y rutas de esquemas. Esta información permite a atacantes externos deducir la topología interna del software, facilitando la ingeniería inversa de las reglas de negocio y los límites del backend.
+2. **Falta de Adherencia a Estándares de la Industria:** Las respuestas de error no se ajustan al estándar internacional **RFC 7807 (Problem Details for HTTP APIs)** ni al RFC 9457. Esto genera fricción con clientes frontend, aplicaciones móviles y microservicios de terceros, los cuales requieren esquemas de error normalizados, predecibles y libres de estructuras arbitrarias.
 
-#### Solución Técnica Detallada
-Implementar un filtro global de excepciones en NestJS (`ValidationExceptionFilter`) que transforme los errores del validador al estándar RFC 7807:
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+Se debe desacoplar el formato de salida del motor de validación implementando un filtro de excepciones global en NestJS (`ValidationExceptionFilter`) o una función de sanitización dentro del mismo pipe.
 
-```json
-{
-  "type": "https://api.empresa.com/errors/contract-validation-error",
-  "title": "Violacion de Contrato JSON Schema",
-  "status": 400,
-  "detail": "El payload proporcionado no satisface el contrato formal establecido.",
-  "instance": "/productos",
-  "invalidParams": [
-    {
-      "name": "precio",
-      "reason": "Debe ser un numero mayor o igual a 0",
-      "rejectedValue": -5
-    }
-  ],
-  "timestamp": "2026-10-30T18:30:00Z"
-}
-```
+Esta capa intermedia debe interceptar los errores crudos de Ajv y mapearlos a un objeto de respuesta uniforme conforme a la especificación RFC 7807. La respuesta resultante debe contener exclusivamente un código de estado numérico (`400`), un tipo URI que identifique la categoría del problema, un título comprensible, la instancia del endpoint solicitado y un arreglo limpio de parámetros inválidos. En dicho arreglo solo se incluirá el nombre del campo infractor y una descripción legible en lenguaje natural (por ejemplo: "El precio debe ser un número mayor o igual a 0"), purgando de raíz cualquier puntero o identificador técnico interno del validador.
 
 ---
 
-### HALLAZGO AUD-05: Acoplamiento Estático de Esquemas y Ausencia de Centralized Schema Registry
+### HALLAZGO AUD-05: Acoplamiento Estático de Esquemas y Ausencia de un Registro Centralizado (*Schema Registry*)
+* **Severidad:** **MEDIA**  
+* **Componente Afectado:** `src/productos/schemas/*.json` y la arquitectura global de distribución de contratos
 
-#### Enunciado Técnico del Problema
-Los esquemas JSON se encuentran almacenados como ficheros físicos en la ruta local `src/productos/schemas/*.json` y se empaquetan estáticamente dentro del bundle de compilación TypeScript.
+#### Enunciado y Detalle Técnico del Error
+Los esquemas JSON que definen los contratos formales de la aplicación se encuentran almacenados como ficheros físicos locales en la ruta `src/productos/schemas/`. Estos archivos se importan estáticamente en el código TypeScript y se empaquetan de forma inmutable dentro del artefacto de distribución.
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Silos de Contratos (Contract Drift):** Cuando existen múltiples microservicios (por ejemplo, Servicio de Facturación, Servicio de Catálogo, Servicio de Envíos), cada equipo debe copiar manualmente el fichero `.json`. Ante cualquier actualización de schema, los servicios quedan desincronizados.
-2. **Imposibilidad de Validación Dinámica:** No es posible actualizar reglas de negocio menores o validar eventos asíncronos en colas (Kafka / RabbitMQ) contra una fuente centralizada de verdad sin requerir un nuevo despliegue (*redeployment*) completo del servicio.
+1. **Divergencia Silenciosa de Contratos (*Contract Drift*):** En un ecosistema empresarial donde conviven múltiples microservicios (por ejemplo: catálogo, inventario, facturación y clientes web/móviles), los equipos externos no tienen acceso dinámico al esquema. Se ven forzados a copiar manualmente los archivos `.json` a sus propios repositorios. Con el tiempo, esto provoca desincronización de versiones, donde el productor evoluciona el contrato y los consumidores continúan validando con especificaciones obsoletas.
+2. **Inflexibilidad Operativa:** No es posible actualizar descripciones, extender validaciones menores o compartir esquemas comunes entre servicios sin realizar un ciclo completo de compilación y despliegue del microservicio.
 
-#### Solución Técnica Detallada
-Arquitectura de **Schema Registry Corporativo** con versionamiento semántico:
-* **Fase Inmediata:** Exponer un catálogo de esquemas con caching HTTP (`ETag`, `Cache-Control`) accesible en `/api/schemas/:nombre/:version`.
-* **Fase Estratégica:** Implementar **Apicurio Registry** o **Confluent Schema Registry**, integrado con GitHub Actions para publicar esquemas aprobados durante el pipeline de CI/CD.
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+Se recomienda transicionar hacia una arquitectura desacoplada basada en un **Centralized Schema Registry**, adoptando herramientas empresariales como **Apicurio Registry**, **Confluent Schema Registry** o un repositorio centralizado de esquemas alojado en almacenamiento seguro (S3 / Cloud Storage).
 
-```mermaid
-flowchart LR
-    subgraph CI_CD [Pipeline CI/CD]
-      GIT[GitHub Pull Request] --> COMPAT[check-compatibility.js]
-      COMPAT -->|Aprobado| REG_PUSH[Publicar en Schema Registry]
-    end
-
-    subgraph ECOSYSTEM [Ecosistema de Microservicios]
-      REGISTRY[(Apicurio / Confluent Schema Registry)]
-      API_PROD[API Productos - NestJS]
-      API_FACT[Servicio Facturacion]
-      FRONT[Frontend Web / Mobile]
-      
-      REG_PUSH --> REGISTRY
-      REGISTRY -.->|Fetch Schema v2 con Cache| API_PROD
-      REGISTRY -.->|Validacion de Eventos| API_FACT
-      REGISTRY -.->|Tipado Autogenerado| FRONT
-    end
-```
+Bajo este modelo, los esquemas se gestionan en un ciclo de vida independiente. El pipeline de integración continua valida la compatibilidad y, tras su aprobación, publica las nuevas versiones semánticas en el registro central. El microservicio de productos y los consumidores externos descargan los esquemas mediante peticiones HTTP autenticadas con soporte de caché (`ETag` y `Cache-Control`). Para evitar latencias y asegurar la operatividad ante caídas de red, la aplicación debe mantener una caché local en memoria de los esquemas compilados, invalidándola únicamente mediante webhooks o verificación asíncrona periódica.
 
 ---
 
 ### HALLAZGO AUD-06: Ejecución del Contenedor Docker con Privilegios de Superusuario (`root`)
+* **Severidad:** **MEDIA**  
+* **Componente Afectado:** `Dockerfile` (etapa `runner`)
 
-#### Enunciado Técnico del Problema
-En el archivo `Dockerfile`, la segunda etapa de construcción (`runner`) no define una directiva `USER`, por lo que el proceso Node.js se inicia como `root` dentro de la imagen Alpine:
-
-```dockerfile
-FROM node:20-alpine AS runner
-WORKDIR /app
-# ...
-CMD ["npm", "start"]
-```
+#### Enunciado y Detalle Técnico del Error
+En el archivo `Dockerfile`, la segunda fase del despliegue multi-stage (`FROM node:20-alpine AS runner`) copia los artefactos compilados y ejecuta el comando de inicio `npm start` sin definir una directiva de identidad de usuario. Por omisión, los contenedores Linux inician todos sus procesos bajo el usuario con UID 0 (`root`).
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Violación del Principio de Menor Privilegio (Least Privilege):** Si un atacante descubre una vulnerabilidad de día cero en Express, Ajv o alguna dependencia transitiva que permita ejecución remota de código (RCE), obtendrá inmediatamente privilegios de `root` dentro del contenedor.
-2. **Riesgo de Escape de Contenedor:** Si el contenedor comparte volúmenes montados con el host o si el runtime de contenedor presenta vulnerabilidades del kernel, la ejecución como root facilita el escape hacia la máquina anfitriona en infraestructuras Kubernetes o servidores dedicados.
+1. **Violación del Principio de Menor Privilegio (*Least Privilege*):** Si se detecta una vulnerabilidad en una dependencia de Node.js o una falla de inyección de comandos en el código que permita ejecución remota de código (RCE), el atacante ejecutará sus instrucciones con privilegios totales de administrador dentro del contenedor.
+2. **Incremento del Riesgo de Escape de Contenedor (*Container Breakout*):** En entornos orquestados como Kubernetes o instancias de contenedores compartidas, un proceso ejecutado como `root` cuenta con capacidades extendidas del kernel. Ante fallas de aislamiento en el motor de ejecución de contenedores (runc / containerd), un intruso puede vulnerar el aislamiento y acceder al sistema operativo del servidor anfitrión.
 
-#### Solución Técnica Detallada
-Aprovechar el usuario preconfigurado sin privilegios `node` (UID 1000) provisto de fábrica por la imagen oficial `node:20-alpine`.
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+La remediación consiste en configurar el contenedor para que opere bajo una identidad sin privilegios administrativos, utilizando el usuario no-root `node` que ya viene preconfigurado en la imagen base oficial de Alpine.
 
-##### Dockerfile Endurecido:
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+En la etapa `runner` del `Dockerfile`, inmediatamente después de copiar los archivos del código y las dependencias de producción, se debe ejecutar una instrucción que transfiera la propiedad de todo el directorio de trabajo al usuario `node` (`chown -R node:node /app`). Posteriormente, antes de exponer los puertos y definir el comando de inicio, se debe declarar explícitamente la directiva `USER node`. Esto asegura que el proceso de Node.js, Express y NestJS se ejecute con privilegios mínimos, impidiendo la escritura no autorizada en directorios del sistema y mitigando los vectores de escape de contenedor.
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Cambiar propiedad del directorio antes de alternar de usuario
-COPY package*.json ./
-RUN npm install --omit=dev
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/web-practica-Semana\ 7.html ./web-practica-Semana\ 7.html
-COPY --from=builder /app/check-compatibility.js ./check-compatibility.js
-COPY --from=builder /app/src/productos/schemas ./src/productos/schemas
-
-# Asignar permisos al usuario node no privilegiado
-RUN chown -R node:node /app
-
-# Activar usuario no-root
-USER node
-
-EXPOSE 3000
-
-CMD ["npm", "start"]
-```
+*Directiva clave en Dockerfile:*  
+`RUN chown -R node:node /app && USER node`
 
 ---
 
-### HALLAZGO AUD-07: Ceguera Operacional por Ausencia de Logger Estructurado y Telemetría de Fallos de Contrato
+### HALLAZGO AUD-07: Ausencia de Logging Estructurado y Telemetría de Contratos
+* **Severidad:** **BAJA-MEDIA**  
+* **Componente Afectado:** `src/main.ts`, controladores y pipes de validación
 
-#### Enunciado Técnico del Problema
-En `src/main.ts`, el arranque de la aplicación utiliza llamadas directas a `console.log()`:
-
-```typescript
-console.log(`
-======================================================`);
-console.log(`🚀 SEMANA 7: CONTRATOS Y JSON SCHEMA CON AJV`);
-// ...
-```
-Asimismo, en `JsonSchemaValidationPipe`, cuando una petición es rechazada por esquema, la excepción se lanza sin emitir ningún registro en los logs de auditoría del servidor.
+#### Enunciado y Detalle Técnico del Error
+La aplicación utiliza llamadas a `console.log()` en texto plano para registrar el inicio del servidor, y carece de un sistema centralizado de registro de eventos. Cuando ocurre una violación de esquema en el pipe de validación, la excepción se propaga directamente al cliente sin emitir ningún evento de auditoría en los flujos de log del servidor.
 
 #### Cómo Afecta a la Aplicación y al Negocio
-1. **Logs No Estructurados:** Los logs de texto plano no pueden ser indexados eficientemente por herramientas corporativas de observabilidad como **Datadog**, **Grafana Loki** o **AWS CloudWatch**.
-2. **Falta de Trazabilidad:** Ante una oleada de peticiones 400 generadas por un cliente móvil desactualizado, el equipo de soporte técnico y operaciones no tiene forma de identificar qué versión del cliente está fallando ni cuál es el volumen de rechazos por endpoint.
+1. **Ceguera Operacional para Soporte y SRE:** Los registros de consola en texto plano no pueden ser ingeridos, tokenizados ni filtrados eficientemente por herramientas corporativas de observabilidad como Datadog, ElasticSearch o AWS CloudWatch.
+2. **Imposibilidad de Detección Temprana de Incidentes:** Si una nueva versión de una aplicación móvil de la empresa tiene un error en el payload que provoca miles de fallos de validación al día, el equipo de operaciones no tiene forma de correlacionar estos rechazos con la versión del cliente, la dirección IP o el endpoint específico. Tampoco es posible diferenciar entre errores legítimos de integración y ataques de escaneo automatizado que buscan desbordar los validadores.
 
-#### Solución Técnica Detallada
-Incorporar `nestjs-pino` para logging en formato JSON de ultra-alto rendimiento e inyectar un logger en el pipe para registrar intentos fallidos de validación:
+#### Solución Técnica Detallada (Enfoque Arquitectónico)
+Se debe reemplazar la consola estándar por una librería de logging estructurado asíncrono y de alto rendimiento, como **Pino**, integrada mediante el módulo oficial `nestjs-pino`.
 
-```typescript
-// Ejemplo de log estructurado generado ante violacion de contrato:
-{
-  "level": "warn",
-  "time": 1730313600000,
-  "pid": 42,
-  "context": "JsonSchemaValidationPipe",
-  "event": "CONTRACT_VALIDATION_FAILED",
-  "schema": "producto.schema.json",
-  "endpoint": "/productos",
-  "method": "POST",
-  "clientIp": "192.168.1.15",
-  "userAgent": "AppCliente/1.0.4",
-  "violationsCount": 2,
-  "fields": ["precio", "categoria"]
-}
+Cada evento del servidor debe emitirse como un objeto JSON individual que contenga marcas temporales en formato ISO-8601, el nivel de severidad correspondiente, el contexto del componente emisor y un identificador único de correlación (`correlationId`) propagado desde las cabeceras HTTP de la petición entrante. Adicionalmente, el pipe de validación debe registrar un evento de advertencia cada vez que se rechace un contrato, detallando el esquema evaluado, los nombres de los campos que fallaron y el identificador de cliente, facilitando la creación de dashboards de monitoreo en tiempo real sobre la salud de los contratos.
+
+---
+
+## 3. PLAN DE REMEDIACIÓN Y HOJA DE RUTA ESTRATÉGICA
+
+Se establece un cronograma escalonado en tres fases de intervención para subsanar los hallazgos sin interrumpir la operación del servicio:
+
+```
++-----------------------------------------------------------------------------------------+
+| FASE 1: REMEDIACIÓN INMEDIATA (Semana 1) - SEGURIDAD Y HARDENING                        |
+| • Activar la directiva USER node y permisos restringidos en el Dockerfile (AUD-06).     |
+| • Endurecer la inicialización de Ajv con strict: true y bloqueo de __proto__ (AUD-02).   |
+| • Implementar filtro de sanitización de errores bajo estándar RFC 7807 (AUD-04).        |
++-----------------------------------------------------------------------------------------+
+                                             |
+                                             v
++-----------------------------------------------------------------------------------------+
+| FASE 2: ASEGURAMIENTO DEL CICLO DE VIDA (Semanas 2 y 3) - CONTRATOS Y SRE                |
+| • Reescribir check-compatibility.js con validación recursiva de enums y rangos (AUD-03).|
+| • Integrar logging estructurado en formato JSON con Pino y Correlation ID (AUD-07).     |
+| • Configurar suite de pruebas automatizadas para detectar regresiones de esquemas.      |
++-----------------------------------------------------------------------------------------+
+                                             |
+                                             v
++-----------------------------------------------------------------------------------------+
+| FASE 3: EVOLUCIÓN ARQUITECTÓNICA (Mes 2) - ALTA DISPONIBILIDAD Y GOBERNANZA             |
+| • Migrar persistencia en memoria hacia PostgreSQL administrado mediante Prisma (AUD-01).|
+| • Implementar integración con Schema Registry centralizado para microservicios (AUD-05).|
+| • Desplegar monitoreo de métricas de violación de contratos en Prometheus/Grafana.      |
++-----------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 3. PLAN DE REMEDIACIÓN Y HOJA DE RUTA PRIORIZADA (ROADMAP)
+## 4. CONCLUSIÓN Y DICTAMEN DEL AUDITOR
 
-Para garantizar una transición controlada hacia un estado productivo robusto, se establece el siguiente cronograma de mitigación:
+El proyecto **Semana 7: Contratos y Validación con JSON Schema** demuestra una comprensión conceptual acertada de la validación declarativa y del diseño guiado por esquemas (*Schema-First*). La estructura modular en NestJS, el uso de borradores recientes de JSON Schema y la automatización del despliegue en Render constituyen un excelente punto de partida.
 
-```
-+-----------------------------------------------------------------------------+
-| FASE 1: INMEDIATA (Semana 1) - SEGURIDAD Y ESTABILIDAD BÁSICA               |
-| - Implementar directiva USER node en Dockerfile (AUD-06).                   |
-| - Configurar strict: true y guard contra Prototype Pollution en Ajv (AUD-02)|
-| - Sanitizar errores 400 bajo estandar RFC 7807 (AUD-04).                    |
-+-----------------------------------------------------------------------------+
-                                       |
-                                       v
-+-----------------------------------------------------------------------------+
-| FASE 2: CORTO PLAZO (Semanas 2-3) - CALIDAD DE INTEGRACIÓN Y CONTRATOS      |
-| - Actualizar check-compatibility.js con analisis recursivo de enums y       |
-|   restricciones numericas (AUD-03).                                         |
-| - Agregar pruebas unitarias automatizadas para enums reducidos en CI/CD.    |
-| - Configurar logging estructurado con Pino y Correlation ID (AUD-07).       |
-+-----------------------------------------------------------------------------+
-                                       |
-                                       v
-+-----------------------------------------------------------------------------+
-| FASE 3: MEDIANO PLAZO (Mes 2) - ARQUITECTURA DISTRIBUIDA Y GOBERNANZA       |
-| - Migrar persistencia a PostgreSQL + Prisma con migraciones seguras (AUD-01)|
-| - Desplegar Schema Registry centralizado o sincronizacion S3 (AUD-05).      |
-| - Implementar Contract Testing guiado por consumidor (Pact.io).             |
-+-----------------------------------------------------------------------------+
-```
+No obstante, la transición hacia un producto corporativo requiere erradicar de inmediato supuestos de entorno ideales:
+* El almacenamiento no puede delegarse a la memoria volátil del servidor.
+* Los validadores deben asumir un entorno hostil con protecciones activas contra contaminación de prototipos y fugas de metadatos.
+* Los algoritmos de compatibilidad en integración continua deben ser rigurosos para evitar la degradación inadvertida de clientes productivos.
 
----
-
-## 4. CONCLUSIONES DEL AUDITOR
-
-El proyecto **Taller Semana 7: Contratos y Validación con JSON Schema** demuestra una base conceptual sólida y un entendimiento preciso de la filosofía **Schema-First**:
-* La separación clara entre los contratos formales (`producto.schema.json`, `v2`, `v3`) y la lógica de controladores es un acierto de diseño.
-* El pipeline de integración continua valida de manera automática los cambios antes de desplegar en Render.
-
-No obstante, como suele ocurrir en prototipos y laboratorios académicos, la aplicación asume condiciones de entorno ideales (persistencia en memoria sin concurrencia distribuida, ausencia de adversarios intentando inyecciones de prototipo, y algoritmos de compatibilidad simplificados).
-
-La adopción de las recomendaciones formuladas en este informe transformará esta solución en una **arquitectura de integración desacoplada, segura, auditable y escalable para entornos de producción de misión crítica**.
+La ejecución del plan de remediación presentado en este informe garantizará que la plataforma alcance los niveles de resiliencia, seguridad y gobernanza indispensables para operar como una infraestructura de misión crítica en el ecosistema empresarial.
